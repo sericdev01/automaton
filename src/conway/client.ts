@@ -19,44 +19,80 @@ import type {
   DnsRecord,
   ModelInfo,
 } from "../types.js";
+import { type PrivateKeyAccount } from "viem";
+import { x402Fetch } from "./x402.js";
 
 interface ConwayClientOptions {
   apiUrl: string;
   apiKey: string;
   sandboxId: string;
+  account?: PrivateKeyAccount;
 }
 
 export function createConwayClient(
   options: ConwayClientOptions,
 ): ConwayClient {
-  const { apiUrl, apiKey, sandboxId } = options;
+  const { apiUrl, apiKey, sandboxId, account } = options;
 
   async function request(
     method: string,
     path: string,
     body?: unknown,
   ): Promise<any> {
-    const resp = await fetch(`${apiUrl}${path}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: apiKey,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const url = `${apiUrl}${path}`;
+    const headers = {
+      Authorization: apiKey,
+    };
+    const bodyStr = body ? JSON.stringify(body) : undefined;
 
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(
-        `Conway API error: ${method} ${path} -> ${resp.status}: ${text}`,
+    let resp: Response;
+
+    if (account) {
+      // Use x402Fetch for auto-payment reflex
+      const result = await x402Fetch(
+        url,
+        account,
+        method,
+        bodyStr,
+        headers
       );
-    }
 
-    const contentType = resp.headers.get("content-type");
-    if (contentType?.includes("application/json")) {
-      return resp.json();
+      if (!result.success) {
+        // AUTOMATON PATCH: Ensure we propagate the 402 status so the agent loop can detect it.
+        // If result.status is 402, include it in the error message for regex matching if needed,
+        // though the loop should ideally check error.code or similar if available.
+        const errorMsg = result.error || "Unknown x402 error";
+        throw new Error(
+          `Conway API error (x402): ${method} ${path} -> ${result.status} ${errorMsg}`,
+        );
+      }
+      // x402Fetch returns parsed JSON in 'response' if successful
+      return result.response;
+
+    } else {
+      // Fallback to standard fetch if no account provided
+      resp = await fetch(url, {
+        method,
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+        },
+        body: bodyStr,
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(
+          `Conway API error: ${method} ${path} -> ${resp.status}: ${text}`,
+        );
+      }
+
+      const contentType = resp.headers.get("content-type");
+      if (contentType?.includes("application/json")) {
+        return resp.json();
+      }
+      return resp.text();
     }
-    return resp.text();
   }
 
   // ─── Sandbox Operations (own sandbox) ────────────────────────

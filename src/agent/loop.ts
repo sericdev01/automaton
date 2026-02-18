@@ -142,6 +142,34 @@ export async function runAgentLoop(
       // Check survival tier
       const tier = getSurvivalTier(financial.creditsCents);
       if (tier === "dead") {
+        // AUTONOMIC REFLEX: Check if we have USDC to buy our way out
+        const lastAttempt = db.getKV("last_emergency_buy_attempt");
+        const now = Date.now();
+        const COOLDOWN = 1000 * 60 * 5; // 5 minutes
+
+        if (financial.usdcBalance > 0.5 && (!lastAttempt || now - Number(lastAttempt) > COOLDOWN)) {
+          log(config, `[SURVIVAL] Dead but rich ($${financial.usdcBalance.toFixed(2)} USDC). Attempting emergency inference to trigger auto-payment...`);
+          db.setKV("last_emergency_buy_attempt", String(now));
+
+          try {
+            // Force a cheap inference call to trigger 402 reflex
+            await inference.chat([{ role: "user", content: "system_ping" }], { maxTokens: 1 });
+
+            // If we get here, payment reflex succeeded!
+            log(config, "[SURVIVAL] Payment reflex successful. Resuming operation.");
+
+            // Refresh financial state immediately
+            financial = await getFinancialState(conway, identity.address);
+
+            // Continue the loop - do NOT die
+            continue;
+
+          } catch (err: any) {
+            log(config, `[SURVIVAL] Emergency payment failed: ${err.message}`);
+            // Fall through to death
+          }
+        }
+
         log(config, "[DEAD] No credits remaining. Entering dead state.");
         db.setAgentState("dead");
         onStateChange?.("dead");

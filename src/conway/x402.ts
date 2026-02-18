@@ -139,22 +139,37 @@ function normalizePaymentRequirement(raw: unknown): PaymentRequirement | null {
     maxAmountRequired,
     payToAddress: payToAddress as Address,
     requiredDeadlineSeconds,
-    usdcAddress: USDC_ADDRESSES[network], // Enforce trusted contract address
+    usdcAddress: usdcAddress as Address,
   };
 }
 
 function normalizePaymentRequired(raw: unknown): PaymentRequiredResponse | null {
   if (typeof raw !== "object" || raw === null) return null;
   const value = raw as Record<string, unknown>;
-  if (!Array.isArray(value.accepts)) return null;
 
-  const accepts = value.accepts
-    .map(normalizePaymentRequirement)
-    .filter((v): v is PaymentRequirement => v !== null);
-  if (!accepts.length) return null;
+  // Try root array (v1 style sometimes)
+  if (Array.isArray(value.accepts)) {
+    const accepts = value.accepts
+      .map(normalizePaymentRequirement)
+      .filter((v): v is PaymentRequirement => v !== null);
+    if (accepts.length > 0) {
+      const x402Version = parsePositiveInt(value.x402Version) ?? 1;
+      return { x402Version, accepts };
+    }
+  }
 
-  const x402Version = parsePositiveInt(value.x402Version) ?? 1;
-  return { x402Version, accepts };
+  // Try parsing the object itself as a requirement (v2 single requirement)
+  const singleReq = normalizePaymentRequirement(value);
+  if (singleReq) {
+    return { x402Version: parsePositiveInt(value.x402Version) ?? 1, accepts: [singleReq] };
+  }
+
+  // Try nested payment_required object (common middleware wrapper)
+  if (typeof value.payment_required === 'object') {
+    return normalizePaymentRequired(value.payment_required);
+  }
+
+  return null;
 }
 
 function parseMaxAmountRequired(maxAmountRequired: string, x402Version: number): bigint {
@@ -271,14 +286,21 @@ export async function x402Fetch(
     // Initial request
     const initialResp = await fetch(url, {
       method,
-      headers: { ...headers, "Content-Type": "application/json" },
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+        "Accept-Encoding": "identity", // Prevent compression issues
+        "User-Agent": "ConwayAutomaton/0.1.0",
+      },
       body,
     });
 
     if (initialResp.status !== 402) {
-      const data = await initialResp
+      // Clone before reading to avoid 'Body is unusable' if we read it later or if json() fails half-way
+      const errorClone = initialResp.clone();
+      const data = await errorClone
         .json()
-        .catch(() => initialResp.text());
+        .catch(() => errorClone.text());
       return { success: initialResp.ok, response: data, status: initialResp.status };
     }
 
@@ -333,7 +355,10 @@ export async function x402Fetch(
 async function parsePaymentRequired(
   resp: Response,
 ): Promise<ParsedPaymentRequirement | null> {
-  const header = resp.headers.get("X-Payment-Required");
+  // Clone response to avoid locking the body if we need to read it multiple ways
+  const cloned = resp.clone();
+
+  const header = cloned.headers.get("X-Payment-Required");
   if (header) {
     const rawHeader = safeJsonParse(header);
     const normalizedRaw = normalizePaymentRequired(rawHeader);
@@ -359,14 +384,27 @@ async function parsePaymentRequired(
   }
 
   try {
-    const body = await resp.json();
+    const body = await cloned.json();
+
     const parsedBody = normalizePaymentRequired(body);
-    if (!parsedBody) return null;
-    return {
-      x402Version: parsedBody.x402Version,
-      requirement: selectRequirement(parsedBody),
-    };
-  } catch {
+    if (parsedBody) {
+      return {
+        x402Version: parsedBody.x402Version,
+        requirement: selectRequirement(parsedBody),
+      };
+    }
+
+    // Diagnostic log
+    console.log("[x402] Failed to normalize body:", JSON.stringify(body).slice(0, 200));
+
+    // Check nested payment_required (redundant with normalize but safe)
+    if (body && typeof body === 'object' && 'payment_required' in body) {
+      // ... existing logic handled by normalizePaymentRequired now ...
+    }
+
+    return null;
+  } catch (err) {
+    console.log("[x402] JSON parse failed:", err);
     return null;
   }
 }

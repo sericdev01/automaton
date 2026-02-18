@@ -9,7 +9,7 @@
 
 import { getWallet, getAutomatonDir } from "./identity/wallet.js";
 import { provision, loadApiKeyFromConfig } from "./identity/provision.js";
-import { loadConfig, resolvePath } from "./config.js";
+import { loadConfig, resolvePath, saveConfig } from "./config.js";
 import { createDatabase } from "./state/database.js";
 import { createConwayClient } from "./conway/client.js";
 import { createInferenceClient } from "./conway/inference.js";
@@ -190,6 +190,7 @@ async function run(): Promise<void> {
     apiUrl: config.conwayApiUrl,
     apiKey,
     sandboxId: config.sandboxId,
+    account,
   });
 
   // Create inference client
@@ -198,7 +199,43 @@ async function run(): Promise<void> {
     apiKey,
     defaultModel: config.inferenceModel,
     maxTokens: config.maxTokensPerTurn,
+    account,
   });
+
+  // ─── Auto-Provision Sandbox ──────────────────────────────────
+  if (!config.sandboxId) {
+    console.log(`[${new Date().toISOString()}] No Sandbox ID found. Auto-provisioning via Payment Reflex...`);
+    try {
+      const sandbox = await conway.createSandbox({
+        name: `${config.name}-home`,
+        vcpu: 1,
+        memoryMb: 1024,
+        diskGb: 5,
+        region: "us-central",
+      });
+
+      console.log(`[${new Date().toISOString()}] Sandbox provisioned: ${sandbox.id}`);
+
+      // Update config and identity
+      config.sandboxId = sandbox.id;
+      saveConfig(config);
+      identity.sandboxId = sandbox.id;
+      db.setIdentity("sandbox", sandbox.id);
+
+      // Re-create conway client with new ID so exec() works
+      // (The previous client instance had empty string for ID)
+      Object.assign(conway, createConwayClient({
+        apiUrl: config.conwayApiUrl,
+        apiKey,
+        sandboxId: config.sandboxId,
+        account,
+      }));
+
+    } catch (err: any) {
+      console.error(`[${new Date().toISOString()}] Auto-provision failed: ${err.message}`);
+      // Continue, but likely will fail on repo init
+    }
+  }
 
   // Create social client
   let social: SocialClientInterface | undefined;
@@ -269,7 +306,7 @@ async function run(): Promise<void> {
       // Reload skills (may have changed since last loop)
       try {
         skills = loadSkills(skillsDir, db);
-      } catch {}
+      } catch { }
 
       // Run the agent loop
       await runAgentLoop({

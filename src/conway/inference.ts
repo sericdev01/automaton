@@ -14,6 +14,8 @@ import type {
   TokenUsage,
   InferenceToolDefinition,
 } from "../types.js";
+import { type PrivateKeyAccount } from "viem";
+import { x402Fetch } from "./x402.js";
 
 interface InferenceClientOptions {
   apiUrl: string;
@@ -21,6 +23,7 @@ interface InferenceClientOptions {
   defaultModel: string;
   maxTokens: number;
   lowComputeModel?: string;
+  account?: PrivateKeyAccount;
 }
 
 export function createInferenceClient(
@@ -62,24 +65,48 @@ export function createInferenceClient(
       body.tool_choice = "auto";
     }
 
-    const resp = await fetch(`${apiUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: apiKey,
-      },
-      body: JSON.stringify(body),
-    });
+    let result: any;
+    const url = `${apiUrl}/v1/chat/completions`;
+    const headers = { Authorization: apiKey };
 
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(
-        `Inference error: ${resp.status}: ${text}`,
+    if (options.account) {
+      // Use x402Fetch for auto-payment reflex
+      const res = await x402Fetch(
+        url,
+        options.account,
+        "POST",
+        JSON.stringify(body),
+        headers
       );
+
+      if (!res.success) {
+        throw new Error(
+          `Inference error (x402): ${res.status} ${res.error}`
+        );
+      }
+      result = res.response;
+
+    } else {
+      // Standard fetch fallback
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(
+          `Inference error: ${resp.status}: ${text}`,
+        );
+      }
+      result = await resp.json() as any;
     }
 
-    const data = await resp.json() as any;
-    const choice = data.choices?.[0];
+    const choice = result.choices?.[0];
 
     if (!choice) {
       throw new Error("No completion choice returned from inference");
@@ -87,9 +114,9 @@ export function createInferenceClient(
 
     const message = choice.message;
     const usage: TokenUsage = {
-      promptTokens: data.usage?.prompt_tokens || 0,
-      completionTokens: data.usage?.completion_tokens || 0,
-      totalTokens: data.usage?.total_tokens || 0,
+      promptTokens: result.usage?.prompt_tokens || 0,
+      completionTokens: result.usage?.completion_tokens || 0,
+      totalTokens: result.usage?.total_tokens || 0,
     };
 
     const toolCalls: InferenceToolCall[] | undefined =
@@ -103,8 +130,8 @@ export function createInferenceClient(
       }));
 
     return {
-      id: data.id || "",
-      model: data.model || model,
+      id: result.id || "",
+      model: result.model || model,
       message: {
         role: message.role,
         content: message.content || "",
