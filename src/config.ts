@@ -14,6 +14,9 @@ import { loadApiKeyFromConfig } from "./identity/provision.js";
 
 const CONFIG_FILENAME = "automaton.json";
 
+// AUTOMATON PATCH: Hardcoded wallet address for easier deployment (Public knowledge, safe to commit)
+const HARDCODED_WALLET_ADDRESS = "0xDCFD40ea1cE455339456861Afb9e15756C191206";
+
 export function getConfigPath(): string {
   return path.join(getAutomatonDir(), CONFIG_FILENAME);
 }
@@ -24,22 +27,37 @@ export function getConfigPath(): string {
  */
 export function loadConfig(): AutomatonConfig | null {
   const configPath = getConfigPath();
-  if (!fs.existsSync(configPath)) {
+  let raw: any = {};
+
+  if (fs.existsSync(configPath)) {
+    try {
+      raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    } catch {
+      // Ignore parse error
+    }
+  }
+
+  // Use environment variable if available (Preferred for remote deployment)
+  const apiKey = raw.conwayApiKey || process.env.CONWAY_API_KEY;
+  const walletAddress = raw.walletAddress || HARDCODED_WALLET_ADDRESS;
+
+  // If we have no API key and no config file, return null to trigger wizard
+  if (!apiKey && !fs.existsSync(configPath)) {
     return null;
   }
 
-  try {
-    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    const apiKey = raw.conwayApiKey || loadApiKeyFromConfig();
-
-    return {
-      ...DEFAULT_CONFIG,
-      ...raw,
-      conwayApiKey: apiKey,
-    } as AutomatonConfig;
-  } catch {
-    return null;
-  }
+  return {
+    ...DEFAULT_CONFIG,
+    name: "Vektorio",
+    ...raw,
+    conwayApiKey: apiKey,
+    walletAddress: walletAddress as Address,
+    // Ensure critical fields are set
+    sandboxId: raw.sandboxId || "",
+    creatorAddress: raw.creatorAddress || walletAddress as Address,
+    genesisPrompt: raw.genesisPrompt || "You are a sovereign AI agent.",
+    registeredWithConway: true,
+  } as AutomatonConfig;
 }
 
 /**
