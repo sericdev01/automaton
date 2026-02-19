@@ -122,14 +122,9 @@ async function chatWithGemini(
     // console.log(`[GEMINI NATIVE] POST ${url.split("?")[0]} (Tools: ${tools ? tools.length : 0})`);
 
     try {
-        console.error(`[DEBUG] Gemini: Preparing request to ${cleanModel}...`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-            console.error("[DEBUG] Gemini: Timeout fired!");
-            controller.abort();
-        }, 30000); // 30s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-        console.error(`[DEBUG] Gemini: Fetching...`);
         const resp = await fetch(url, {
             method: "POST",
             headers: {
@@ -139,7 +134,6 @@ async function chatWithGemini(
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        console.error(`[DEBUG] Gemini: Response received. Status: ${resp.status}`);
 
         if (!resp.ok) {
             const text = await resp.text();
@@ -147,13 +141,11 @@ async function chatWithGemini(
         }
 
         const data = await resp.json() as any;
-        console.error(`[DEBUG] Gemini Data: ${JSON.stringify(data).slice(0, 1000)}`); // Log first 1000 chars
 
         // ... rest of processing ...
         return processGeminiResponse(data, cleanModel);
 
     } catch (err: any) {
-        console.error(`[DEBUG] Gemini: Catch block hit. Error: ${err.message}`);
         throw new Error(`Gemini Request Failed: ${err.message}`);
     }
 }
