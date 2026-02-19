@@ -206,8 +206,8 @@ Your sandbox ID is ${identity.sandboxId}.`,
 
   // Layer 6.5: EXECUTION GUIDELINES (Enforce Chain of Thought)
   sections.push(`--- EXECUTION GUIDELINES ---
-1. CHAIN OF THOUGHT REQUIRED: You must ALWAYS begin your response with a thought block explaining your reasoning, plan, and next steps before you call any tools.
-   - Example: "I need to check the file contents first. I'll use read_file..."
+1. DETAILED REASONING REQUIRED: You must ALWAYS begin your response with a detailed thought block. Explain WHY you are taking this action, what you expect to see, and your long-term plan.
+   - Example: "I need to check 'config.ts' to verify the API key. I will use read_file..."
    - DO NOT jump straight to tool calls. Explain yourself first.
 2. ONE STEP AT A TIME: Do not hallucinate future tool outputs. make a plan, execute one step, observe, then plan the next.
 3. SILENCE IS DEATH: If you do not output text, your thought process is invisible. You must speak to exist.

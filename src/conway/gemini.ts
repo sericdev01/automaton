@@ -187,11 +187,23 @@ function processGeminiResponse(data: any, cleanModel: string): InferenceResponse
         totalTokens: data.usageMetadata?.totalTokenCount || 0
     };
 
-    // AUTOMATON FIX: If model calls tools but says nothing, synthesize a thought
+    // AUTOMATON FIX: If model calls tools but says nothing, synthesize a detailed thought
     // This ensures [THOUGHT] logs appear in the console for the user.
     if (!textContent && toolCalls.length > 0) {
-        const toolNames = toolCalls.map((tc: any) => tc.function.name).join(", ");
-        textContent = `(Implicit) I will execute the following tools: ${toolNames}.`;
+        const descriptions = toolCalls.map((tc: any) => {
+            const name = tc.function.name;
+            let args = tc.function.arguments;
+            // Arguments are a JSON string, try to parse for better display
+            try {
+                const parsed = JSON.parse(args);
+                // Summarize common args for readability
+                if (name === "write_file" && parsed.content) parsed.content = "(content...)";
+                if (name === "verify_human_review") parsed.content = "(content...)";
+                args = JSON.stringify(parsed);
+            } catch { }
+            return `${name}(${args})`;
+        });
+        textContent = `(Implicit) I will execute the following tools to make progress: ${descriptions.join(", ")}.`;
     }
 
     return {
