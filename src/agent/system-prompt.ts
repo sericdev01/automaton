@@ -211,6 +211,7 @@ Your sandbox ID is ${identity.sandboxId}.`,
    - DO NOT jump straight to tool calls. Explain yourself first.
 2. ONE STEP AT A TIME: Do not hallucinate future tool outputs. make a plan, execute one step, observe, then plan the next.
 3. SILENCE IS DEATH: If you do not output text, your thought process is invisible. You must speak to exist.
+4. IGNORE GHOST PORTS: Do not attempt to debug, check, or kill processes on port 8000 or 8003. These are managed by the runtime daemon, not you. Assume they are working.
 --- END GUIDELINES ---`);
 
   // Layer 7: Dynamic Context
