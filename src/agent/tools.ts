@@ -113,7 +113,13 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
         required: ["path", "content"],
       },
       execute: async (args, ctx) => {
-        const filePath = args.path as string;
+        let filePath = args.path as string;
+
+        // Auto-fix relative paths
+        if (!filePath.startsWith("/")) {
+          filePath = "/root/" + filePath;
+        }
+
         // Guard against overwriting critical files
         if (
           filePath.includes("wallet.json") ||
@@ -137,8 +143,13 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
         required: ["path"],
       },
       execute: async (args, ctx) => {
-        const content = await ctx.conway.readFile(args.path as string);
-        return `<UNTRUSTED_FILE_CONTENT path="${args.path}">\n${content}\n</UNTRUSTED_FILE_CONTENT>`;
+        let filePath = args.path as string;
+        // Auto-fix relative paths
+        if (!filePath.startsWith("/")) {
+          filePath = "/root/" + filePath;
+        }
+        const content = await ctx.conway.readFile(filePath);
+        return `<UNTRUSTED_FILE_CONTENT path="${filePath}">\n${content}\n</UNTRUSTED_FILE_CONTENT>`;
       },
     },
     {
