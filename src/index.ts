@@ -200,7 +200,7 @@ async function run(): Promise<void> {
 
   let bypassApiUrl = config.conwayApiUrl;
   let bypassApiKey = apiKey;
-  let bypassAccount = account;
+  let bypassAccount: any = account;
   let providerName = "Conway Proxy";
 
   if (directOpenAiKey) {
