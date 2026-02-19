@@ -53,10 +53,12 @@ export function loadConfig(): AutomatonConfig | null {
     conwayApiKey: apiKey,
     walletAddress: walletAddress as Address,
     // Ensure critical fields are set
-    sandboxId: raw.sandboxId || "",
+    // Ensure critical fields are set
+    sandboxId: raw.sandboxId || process.env.CONWAY_SANDBOX_ID || "",
     creatorAddress: raw.creatorAddress || walletAddress as Address,
     genesisPrompt: raw.genesisPrompt || "You are a sovereign AI agent.",
     registeredWithConway: true,
+    inferenceModel: raw.inferenceModel || process.env.CONWAY_INFERENCE_MODEL || "gpt-4o",
   } as AutomatonConfig;
 }
 
