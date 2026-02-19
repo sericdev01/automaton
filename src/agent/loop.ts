@@ -334,7 +334,7 @@ export async function runAgentLoop(
         log(config, "[IDLE] No pending inputs. Entering brief sleep.");
         db.setKV(
           "sleep_until",
-          new Date(Date.now() + 60_000).toISOString(),
+          new Date(Date.now() + 30_000).toISOString(),
         );
         db.setAgentState("sleeping");
         onStateChange?.("sleeping");
@@ -420,8 +420,20 @@ function estimateCostCents(
 }
 
 function log(config: AutomatonConfig, message: string): void {
-  if (config.logLevel === "debug" || config.logLevel === "info") {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${message}`);
+  // QUIET MODE: Only show high-level thoughts and critical errors
+  const ALLOWED_PREFIXES = [
+    "[THOUGHT]",
+    "[ERROR]",
+    "[FATAL]",
+    "[SURVIVAL]",
+    "[CREATOR COMMAND]",
+    "[UNTRUSTED STRANGER MESSAGE]"
+  ];
+
+  const isAllowed = ALLOWED_PREFIXES.some(prefix => message.includes(prefix));
+
+  if (isAllowed || config.logLevel === "debug") {
+    // Strip timestamp for cleaner reading in quiet mode
+    console.log(message);
   }
 }
