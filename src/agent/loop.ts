@@ -358,6 +358,11 @@ export async function runAgentLoop(
           source: "system_circuit_breaker",
         };
         consecutiveErrors = 0; // Reset to allow recovery attempt
+      } else {
+        // AUTOMATON PATCH: Exponential backoff to prevent API spam (429s)
+        const delayMs = Math.min(1000 * Math.pow(2, consecutiveErrors), 30000);
+        log(config, `[BACKOFF] Waiting ${delayMs}ms before retry...`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
   }
