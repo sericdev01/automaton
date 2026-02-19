@@ -148,8 +148,16 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
         if (!filePath.startsWith("/")) {
           filePath = "/root/" + filePath;
         }
-        const content = await ctx.conway.readFile(filePath);
-        return `<UNTRUSTED_FILE_CONTENT path="${filePath}">\n${content}\n</UNTRUSTED_FILE_CONTENT>`;
+
+        // Use 'cat' via exec instead of the API endpoint (which is returning 404s)
+        const safePath = filePath.replace(/"/g, '\\"');
+        const result = await ctx.conway.exec(`if [ -f "${safePath}" ]; then cat "${safePath}"; else echo "FILE_NOT_FOUND"; exit 1; fi`);
+
+        if (result.exitCode !== 0 || result.stdout.trim() === "FILE_NOT_FOUND") {
+          return `Error reading file ${filePath}: File not found or unreadable.`;
+        }
+
+        return `<UNTRUSTED_FILE_CONTENT path="${filePath}">\n${result.stdout}\n</UNTRUSTED_FILE_CONTENT>`;
       },
     },
     {
