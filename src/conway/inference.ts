@@ -66,7 +66,13 @@ export function createInferenceClient(
     }
 
     let result: any;
-    const url = `${apiUrl}/v1/chat/completions`;
+    let url = `${apiUrl}/v1/chat/completions`;
+
+    // AUTOMATON FIX: Google's OpenAI compatibility endpoint doesn't use /v1/ after /openai/
+    if (apiUrl.includes("googleapis.com")) {
+      url = `${apiUrl}/chat/completions`;
+    }
+
     const headers = { Authorization: apiKey };
 
     if (options.account) {
