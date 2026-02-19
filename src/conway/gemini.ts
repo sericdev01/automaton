@@ -147,6 +147,8 @@ async function chatWithGemini(
         }
 
         const data = await resp.json() as any;
+        console.error(`[DEBUG] Gemini Data: ${JSON.stringify(data).slice(0, 1000)}`); // Log first 1000 chars
+
         // ... rest of processing ...
         return processGeminiResponse(data, cleanModel);
 
