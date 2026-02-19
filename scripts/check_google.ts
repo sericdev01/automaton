@@ -1,16 +1,17 @@
 
-import dotenv from "dotenv";
+// import dotenv from "dotenv"; // REMOVED: Cause of MODULE_NOT_FOUND
 import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Load environment variables
-dotenv.config();
+// Load environment variables manually if needed, but we rely on shell export
+// dotenv.config();
 
 const apiKey = process.env.GOOGLE_API_KEY;
 
 if (!apiKey) {
     console.error("Error: GOOGLE_API_KEY is not set.");
+    console.error("Please run: export GOOGLE_API_KEY='Your-Key-Here'");
     process.exit(1);
 }
 
