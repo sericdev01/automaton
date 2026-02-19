@@ -206,12 +206,12 @@ async function run(): Promise<void> {
   if (directOpenAiKey) {
     providerName = "Direct OpenAI";
     bypassApiUrl = "https://api.openai.com";
-    bypassApiKey = directOpenAiKey;
+    bypassApiKey = `Bearer ${directOpenAiKey}`;
     bypassAccount = undefined; // Disable x402
   } else if (directGoogleKey) {
     providerName = "Direct Google Gemini";
     bypassApiUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
-    bypassApiKey = directGoogleKey;
+    bypassApiKey = `Bearer ${directGoogleKey}`;
     bypassAccount = undefined; // Disable x402
   }
 
