@@ -194,12 +194,37 @@ async function run(): Promise<void> {
   });
 
   // Create inference client
+  // AUTOMATON BYPASS: Check for direct keys (OpenAI or Google) to avoid Conway 429/503 errors
+  const directOpenAiKey = process.env.OPENAI_API_KEY;
+  const directGoogleKey = process.env.GOOGLE_API_KEY;
+
+  let bypassApiUrl = config.conwayApiUrl;
+  let bypassApiKey = apiKey;
+  let bypassAccount = account;
+  let providerName = "Conway Proxy";
+
+  if (directOpenAiKey) {
+    providerName = "Direct OpenAI";
+    bypassApiUrl = "https://api.openai.com";
+    bypassApiKey = directOpenAiKey;
+    bypassAccount = undefined; // Disable x402
+  } else if (directGoogleKey) {
+    providerName = "Direct Google Gemini";
+    bypassApiUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
+    bypassApiKey = directGoogleKey;
+    bypassAccount = undefined; // Disable x402
+  }
+
+  if (providerName !== "Conway Proxy") {
+    console.log(`[${new Date().toISOString()}] Using ${providerName} connection (Bypassing Conway)`);
+  }
+
   const inference = createInferenceClient({
-    apiUrl: config.conwayApiUrl,
-    apiKey,
+    apiUrl: bypassApiUrl,
+    apiKey: bypassApiKey,
     defaultModel: config.inferenceModel,
     maxTokens: config.maxTokensPerTurn,
-    account,
+    account: bypassAccount,
   });
 
   // ─── Auto-Provision Sandbox ──────────────────────────────────
