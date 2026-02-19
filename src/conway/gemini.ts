@@ -121,21 +121,36 @@ async function chatWithGemini(
 
     // console.log(`[GEMINI NATIVE] POST ${url.split("?")[0]} (Tools: ${tools ? tools.length : 0})`);
 
-    const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-    });
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-    if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Gemini Native Error ${resp.status}: ${text}`);
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!resp.ok) {
+            const text = await resp.text();
+            throw new Error(`Gemini Native Error ${resp.status}: ${text}`);
+        }
+
+        const data = await resp.json() as any;
+        // ... rest of processing ...
+        return processGeminiResponse(data, cleanModel);
+
+    } catch (err: any) {
+        throw new Error(`Gemini Request Failed: ${err.message}`);
     }
+}
 
-    const data = await resp.json() as any;
-
+// Helper to process response (extracted to avoid massive indentation)
+function processGeminiResponse(data: any, cleanModel: string): InferenceResponse {
     // Parse response
     const candidate = data.candidates?.[0];
     if (!candidate) {
@@ -179,7 +194,7 @@ async function chatWithGemini(
             content: textContent,
             tool_calls: toolCalls.length > 0 ? toolCalls : undefined
         },
-        toolCalls: toolCalls, // Redundant but good for interface
+        toolCalls: toolCalls,
         usage,
         finishReason: candidate.finishReason === "STOP" ? "stop" : "length"
     };
