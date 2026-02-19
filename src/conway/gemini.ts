@@ -187,6 +187,13 @@ function processGeminiResponse(data: any, cleanModel: string): InferenceResponse
         totalTokens: data.usageMetadata?.totalTokenCount || 0
     };
 
+    // AUTOMATON FIX: If model calls tools but says nothing, synthesize a thought
+    // This ensures [THOUGHT] logs appear in the console for the user.
+    if (!textContent && toolCalls.length > 0) {
+        const toolNames = toolCalls.map((tc: any) => tc.function.name).join(", ");
+        textContent = `(Implicit) I will execute the following tools: ${toolNames}.`;
+    }
+
     return {
         id: "gemini-native-" + Date.now(),
         model: cleanModel,
