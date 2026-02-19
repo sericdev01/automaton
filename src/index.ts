@@ -197,37 +197,55 @@ async function run(): Promise<void> {
   // Create inference client
   let inference;
 
-  // AUTOMATON BYPASS: Check for direct keys (OpenAI or Google)
+  // 1. Create Primary Client (Conway or OpenAI Direct)
+  let primaryClient: any;
+
+  // Check for OpenAI Direct Key first
   const directOpenAiKey = process.env.OPENAI_API_KEY;
-  const directGoogleKey = process.env.GOOGLE_API_KEY;
-
-  if (directGoogleKey) {
-    console.log(`[${new Date().toISOString()}] Using Direct Google Gemini connection (Native Client)`);
-    inference = createGeminiClient(
-      directGoogleKey,
-      config.inferenceModel,
-      config.maxTokensPerTurn
-    );
-  } else {
-    // Standard Conway or Direct OpenAI (via Compatibility Layer)
-    let bypassApiUrl = config.conwayApiUrl;
-    let bypassApiKey = apiKey;
-    let bypassAccount: any = account;
-
-    if (directOpenAiKey) {
-      console.log(`[${new Date().toISOString()}] Using Direct OpenAI connection (Bypassing Conway Proxy)`);
-      bypassApiUrl = "https://api.openai.com";
-      bypassApiKey = `Bearer ${directOpenAiKey}`;
-      bypassAccount = undefined;
-    }
-
-    inference = createInferenceClient({
-      apiUrl: bypassApiUrl,
-      apiKey: bypassApiKey,
+  if (directOpenAiKey) {
+    console.log(`[${new Date().toISOString()}] Primary: Direct OpenAI connection (Bypassing Conway Proxy)`);
+    primaryClient = createInferenceClient({
+      apiUrl: "https://api.openai.com",
+      apiKey: `Bearer ${directOpenAiKey}`,
       defaultModel: config.inferenceModel,
       maxTokens: config.maxTokensPerTurn,
-      account: bypassAccount,
+      account: undefined, // No payment for direct usage
     });
+  } else {
+    // Use Standard Conway Client
+    console.log(`[${new Date().toISOString()}] Primary: Conway Network (Paid via x402)`);
+    primaryClient = createInferenceClient({
+      apiUrl: config.conwayApiUrl,
+      apiKey: apiKey,
+      defaultModel: config.inferenceModel,
+      maxTokens: config.maxTokensPerTurn,
+      account: account,
+    });
+  }
+
+  // 2. Create Fallback Client (Gemini Native)
+  const directGoogleKey = process.env.GOOGLE_API_KEY;
+  let fallbackClient: any;
+
+  if (directGoogleKey) {
+    console.log(`[${new Date().toISOString()}] Fallback: Google Gemini (Native Client)`);
+    fallbackClient = createGeminiClient(
+      directGoogleKey,
+      config.inferenceModel, // Use same model config, or fallback to 'gemini-1.5-flash' internally
+      config.maxTokensPerTurn
+    );
+  }
+
+  // 3. compose Final Client
+  if (fallbackClient) {
+    // Import dynamically or assume it's available via closure if I move the import up
+    // But for cleanliness in this file replacement, I'll rely on the import I need to add at the top.
+    const { createHybridClient } = await import("./conway/hybrid.js");
+    inference = createHybridClient(primaryClient, fallbackClient);
+    console.log(`[${new Date().toISOString()}] Inference Engine: HYBRID (Primary + Fallback Enabled)`);
+  } else {
+    inference = primaryClient;
+    console.log(`[${new Date().toISOString()}] Inference Engine: SINGLE (Primary Only)`);
   }
 
   // ─── Auto-Provision Sandbox ──────────────────────────────────
