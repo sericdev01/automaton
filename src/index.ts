@@ -214,10 +214,19 @@ async function run(): Promise<void> {
   } else {
     // Use Standard Conway Client
     console.log(`[${new Date().toISOString()}] Primary: Conway Network (Paid via x402)`);
+
+    // Safety Force: If config model is Gemini, default Primary to gpt-4o-mini (cheap/fast) or gpt-4o
+    // to avoid sending invalid model names to OpenAI/Conway.
+    let primaryModel = config.inferenceModel;
+    if (primaryModel.toLowerCase().includes("gemini")) {
+      console.log(`[${new Date().toISOString()}] Config model '${primaryModel}' is incompatible with Primary. Defaulting Primary to 'gpt-4o'.`);
+      primaryModel = "gpt-4o";
+    }
+
     primaryClient = createInferenceClient({
       apiUrl: config.conwayApiUrl,
       apiKey: apiKey,
-      defaultModel: config.inferenceModel,
+      defaultModel: primaryModel,
       maxTokens: config.maxTokensPerTurn,
       account: account,
     });

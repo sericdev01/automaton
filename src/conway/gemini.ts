@@ -3,6 +3,7 @@ import { ChatMessage, InferenceResponse, TokenUsage, InferenceClient, InferenceO
 /**
  * Native Google Gemini Client Factory
  * Bypasses the OpenAI compatibility layer which is proving unreliable.
+ * Now includes TOOL SUPPORT.
  */
 export function createGeminiClient(
     apiKey: string,
@@ -17,7 +18,7 @@ export function createGeminiClient(
     ): Promise<InferenceResponse> => {
         const model = opts?.model || currentModel;
         const tokenLimit = opts?.maxTokens || maxTokens;
-        return chatWithGemini(apiKey, model, messages, tokenLimit);
+        return chatWithGemini(apiKey, model, messages, tokenLimit, opts?.tools);
     };
 
     const setLowComputeMode = (enabled: boolean): void => {
@@ -44,7 +45,8 @@ async function chatWithGemini(
     apiKey: string,
     model: string,
     messages: ChatMessage[],
-    maxTokens: number
+    maxTokens: number,
+    tools?: any[]
 ): Promise<InferenceResponse> {
     // Strip "models/" prefix if present
     const cleanModel = model.replace(/^models\//, "");
@@ -52,17 +54,51 @@ async function chatWithGemini(
     // Construct URL for native GenerateContent API
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
 
-    // Convert OpenAI messages to Gemini Content format
+    // 1. Map Tools (OpenAI -> Gemini)
+    let geminiTools: any = undefined;
+    if (tools && tools.length > 0) {
+        const functionDeclarations = tools.map((t: any) => {
+            // OpenAI: { type: 'function', function: { name, description, parameters } }
+            // Gemini: { name, description, parameters }
+            return {
+                name: t.function.name,
+                description: t.function.description,
+                parameters: t.function.parameters
+            };
+        });
+        geminiTools = [{ functionDeclarations }];
+    }
+
+    // 2. Map Messages (OpenAI -> Gemini)
     // We map ALL messages to contents. System -> User.
-    // This ensures contents is never empty and avoids 400 errors.
+    // Tool results -> User text (Simplification to avoid complex funtionResponse mapping)
     const contents = messages.map(msg => {
         let role = "user";
-        if (msg.role === "assistant") role = "model";
-        // Map system to user to ensure we have content and avoid 'systemInstruction' complexity
-        // which can be strict about order or existence.
+        let text = msg.content || "";
+
+        if (msg.role === "assistant") {
+            role = "model";
+            // If assistant message has NO content but HAS tool_calls, we must provide some text or native functionCall
+            // For simplicity in this direction (history), we can just say "Calling tool..."
+            if (!text && msg.tool_calls) {
+                text = `[Calling tools: ${msg.tool_calls.map((tc: any) => tc.function.name).join(", ")}]`;
+            }
+        } else if (msg.role === "tool") {
+            role = "user";
+            // Prefix to make it clear it's a tool output
+            text = `[Tool Output]: ${text}`;
+        } else if (msg.role === "system") {
+            role = "user"; // Map system to user
+        }
+
+        // Ensure we never send empty text parts (Gemini 400 error)
+        if (!text || text.trim() === "") {
+            text = "...";
+        }
+
         return {
             role,
-            parts: [{ text: msg.content }]
+            parts: [{ text: text + (role === "user" && msg === messages[messages.length - 1] ? "\n\n[SYSTEM: If you need to perform an action, use the available tools. Do not just describe the action.]" : "") }]
         };
     });
 
@@ -79,7 +115,11 @@ async function chatWithGemini(
         }
     };
 
-    console.log(`[GEMINI NATIVE] POST ${url.split("?")[0]}...`); // Log URL without key
+    if (geminiTools) {
+        body.tools = geminiTools;
+    }
+
+    console.log(`[GEMINI NATIVE] POST ${url.split("?")[0]} (Tools: ${tools ? tools.length : 0})`);
 
     const resp = await fetch(url, {
         method: "POST",
@@ -103,7 +143,27 @@ async function chatWithGemini(
     }
 
     const contentParts = candidate.content?.parts || [];
-    const text = contentParts.map((p: any) => p.text).join("");
+
+    // Extract Text AND Function Calls
+    let textContent = "";
+    const toolCalls: any[] = [];
+
+    for (const part of contentParts) {
+        if (part.text) {
+            textContent += part.text;
+        }
+        if (part.functionCall) {
+            // Map Gemini functionCall -> OpenAI tool_call
+            toolCalls.push({
+                id: "call_" + Math.random().toString(36).substring(2, 9), // Gemini doesn't give IDs, generate one
+                type: "function",
+                function: {
+                    name: part.functionCall.name,
+                    arguments: JSON.stringify(part.functionCall.args || {}) // Gemini gives object -> stringify for OpenAI Compat
+                }
+            });
+        }
+    }
 
     const usage: TokenUsage = {
         promptTokens: data.usageMetadata?.promptTokenCount || 0,
@@ -116,10 +176,10 @@ async function chatWithGemini(
         model: cleanModel,
         message: {
             role: "assistant",
-            content: text,
-            tool_calls: [] // Native tool calling support omitted for simplicity unless needed
+            content: textContent,
+            tool_calls: toolCalls.length > 0 ? toolCalls : undefined
         },
-        toolCalls: [],
+        toolCalls: toolCalls, // Redundant but good for interface
         usage,
         finishReason: candidate.finishReason === "STOP" ? "stop" : "length"
     };
