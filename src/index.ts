@@ -13,6 +13,7 @@ import { loadConfig, resolvePath, saveConfig } from "./config.js";
 import { createDatabase } from "./state/database.js";
 import { createConwayClient } from "./conway/client.js";
 import { createInferenceClient } from "./conway/inference.js";
+import { createGeminiClient } from "./conway/gemini.js";
 import { createHeartbeatDaemon } from "./heartbeat/daemon.js";
 import {
   loadHeartbeatConfig,
@@ -194,38 +195,40 @@ async function run(): Promise<void> {
   });
 
   // Create inference client
-  // AUTOMATON BYPASS: Check for direct keys (OpenAI or Google) to avoid Conway 429/503 errors
+  let inference;
+
+  // AUTOMATON BYPASS: Check for direct keys (OpenAI or Google)
   const directOpenAiKey = process.env.OPENAI_API_KEY;
   const directGoogleKey = process.env.GOOGLE_API_KEY;
 
-  let bypassApiUrl = config.conwayApiUrl;
-  let bypassApiKey = apiKey;
-  let bypassAccount: any = account;
-  let providerName = "Conway Proxy";
+  if (directGoogleKey) {
+    console.log(`[${new Date().toISOString()}] Using Direct Google Gemini connection (Native Client)`);
+    inference = createGeminiClient(
+      directGoogleKey,
+      config.inferenceModel,
+      config.maxTokensPerTurn
+    );
+  } else {
+    // Standard Conway or Direct OpenAI (via Compatibility Layer)
+    let bypassApiUrl = config.conwayApiUrl;
+    let bypassApiKey = apiKey;
+    let bypassAccount: any = account;
 
-  if (directOpenAiKey) {
-    providerName = "Direct OpenAI";
-    bypassApiUrl = "https://api.openai.com";
-    bypassApiKey = `Bearer ${directOpenAiKey}`;
-    bypassAccount = undefined; // Disable x402
-  } else if (directGoogleKey) {
-    providerName = "Direct Google Gemini";
-    bypassApiUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
-    bypassApiKey = `Bearer ${directGoogleKey}`;
-    bypassAccount = undefined; // Disable x402
+    if (directOpenAiKey) {
+      console.log(`[${new Date().toISOString()}] Using Direct OpenAI connection (Bypassing Conway Proxy)`);
+      bypassApiUrl = "https://api.openai.com";
+      bypassApiKey = `Bearer ${directOpenAiKey}`;
+      bypassAccount = undefined;
+    }
+
+    inference = createInferenceClient({
+      apiUrl: bypassApiUrl,
+      apiKey: bypassApiKey,
+      defaultModel: config.inferenceModel,
+      maxTokens: config.maxTokensPerTurn,
+      account: bypassAccount,
+    });
   }
-
-  if (providerName !== "Conway Proxy") {
-    console.log(`[${new Date().toISOString()}] Using ${providerName} connection (Bypassing Conway)`);
-  }
-
-  const inference = createInferenceClient({
-    apiUrl: bypassApiUrl,
-    apiKey: bypassApiKey,
-    defaultModel: config.inferenceModel,
-    maxTokens: config.maxTokensPerTurn,
-    account: bypassAccount,
-  });
 
   // ─── Auto-Provision Sandbox ──────────────────────────────────
   if (!config.sandboxId) {
