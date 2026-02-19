@@ -53,33 +53,22 @@ async function chatWithGemini(
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
 
     // Convert OpenAI messages to Gemini Content format
+    // We map ALL messages to contents. System -> User.
+    // This ensures contents is never empty and avoids 400 errors.
     const contents = messages.map(msg => {
         let role = "user";
         if (msg.role === "assistant") role = "model";
-        if (msg.role === "system") {
-            // Map system to user logic is handled below via separating systemInstruction
-            role = "user";
-        }
+        // Map system to user to ensure we have content and avoid 'systemInstruction' complexity
+        // which can be strict about order or existence.
         return {
             role,
             parts: [{ text: msg.content }]
         };
     });
 
-    // Handle System Prompt separation if possible. 
-    // v1beta supports systemInstruction field.
-    let systemInstruction: any = undefined;
-    if (messages.length > 0 && messages[0].role === "system") {
-        // Treat first message as system instruction if role is system
-        // We must ensure it is NOT included in the contents array.
-
-        // Create the system instruction object
-        systemInstruction = {
-            parts: [{ text: messages[0].content }]
-        };
-
-        // Remove the first element (the system prompt) from the contents array
-        contents.shift();
+    // Safety check: contents must not be empty
+    if (contents.length === 0) {
+        contents.push({ role: "user", parts: [{ text: "Hello" }] });
     }
 
     const body: any = {
@@ -90,11 +79,7 @@ async function chatWithGemini(
         }
     };
 
-    if (systemInstruction) {
-        body.systemInstruction = systemInstruction;
-    }
-
-    console.log(`[GEMINI NATIVE] POST ${url}`);
+    console.log(`[GEMINI NATIVE] POST ${url.split("?")[0]}...`); // Log URL without key
 
     const resp = await fetch(url, {
         method: "POST",
