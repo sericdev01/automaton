@@ -27,7 +27,7 @@ export function createHybridClient(
         if (useFallback) {
             const now = Date.now();
             if (now - lastPrimaryFailure > PRIMARY_RETRY_INTERVAL_MS) {
-                console.log(`[HYBRID] Retry interval passed. Attempting to restore ${primaryName}...`);
+                // console.log(`[HYBRID] Retry interval passed. Attempting to restore ${primaryName}...`);
                 useFallback = false;
             }
         }
@@ -46,7 +46,7 @@ export function createHybridClient(
                 // Fall through to fallback
             }
         } else {
-            console.log(`[HYBRID] Using ${fallbackName} (Fallback Mode Active)`);
+            // console.log(`[HYBRID] Using ${fallbackName} (Fallback Mode Active)`);
         }
 
         // 3. Try Fallback

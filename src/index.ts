@@ -376,9 +376,9 @@ async function run(): Promise<void> {
           console.log(`[${new Date().toISOString()}] State: ${state}`);
         },
         onTurnComplete: (turn) => {
-          console.log(
-            `[${new Date().toISOString()}] Turn ${turn.id}: ${turn.toolCalls.length} tools, ${turn.tokenUsage.totalTokens} tokens`,
-          );
+          // console.log(
+          //   `[${new Date().toISOString()}] Turn ${turn.id}: ${turn.toolCalls.length} tools, ${turn.tokenUsage.totalTokens} tokens`,
+          // );
         },
       });
 

@@ -284,7 +284,7 @@ export async function x402Fetch(
 ): Promise<X402PaymentResult> {
   try {
     // AUTOMATON DIAGNOSTICS
-    console.log(`[x402] ${method} ${url}`);
+    // console.log(`[x402] ${method} ${url}`);
 
     // Initial request
     const initialResp = await fetch(url, {
@@ -300,16 +300,16 @@ export async function x402Fetch(
 
     if (initialResp.status !== 402) {
       if (!initialResp.ok) {
-        console.log(`[x402] Error Status: ${initialResp.status} ${initialResp.statusText}`);
+        // console.log(`[x402] Error Status: ${initialResp.status} ${initialResp.statusText}`);
         const retryAfter = initialResp.headers.get("Retry-After");
-        if (retryAfter) console.log(`[x402] Retry-After: ${retryAfter}`);
+        // if (retryAfter) console.log(`[x402] Retry-After: ${retryAfter}`);
       }
 
       const errorClone = initialResp.clone();
       const text = await errorClone.text();
 
       if (!initialResp.ok) {
-        console.log(`[x402] Response Body: ${text.slice(0, 500)}`);
+        // console.log(`[x402] Response Body: ${text.slice(0, 500)}`);
       }
 
       let data;

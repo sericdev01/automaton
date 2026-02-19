@@ -94,7 +94,7 @@ export function createInferenceClient(
 
     } else {
       // Standard fetch fallback
-      console.log(`[INFERENCE] POST ${url} (model: ${model})`);
+      // console.log(`[INFERENCE] POST ${url} (model: ${model})`);
       const resp = await fetch(url, {
         method: "POST",
         headers: {

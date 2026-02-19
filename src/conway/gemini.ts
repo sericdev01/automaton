@@ -119,7 +119,7 @@ async function chatWithGemini(
         body.tools = geminiTools;
     }
 
-    console.log(`[GEMINI NATIVE] POST ${url.split("?")[0]} (Tools: ${tools ? tools.length : 0})`);
+    // console.log(`[GEMINI NATIVE] POST ${url.split("?")[0]} (Tools: ${tools ? tools.length : 0})`);
 
     const resp = await fetch(url, {
         method: "POST",
