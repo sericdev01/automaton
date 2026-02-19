@@ -283,24 +283,41 @@ export async function x402Fetch(
   headers?: Record<string, string>,
 ): Promise<X402PaymentResult> {
   try {
+    // AUTOMATON DIAGNOSTICS
+    console.log(`[x402] ${method} ${url}`);
+
     // Initial request
     const initialResp = await fetch(url, {
       method,
       headers: {
         ...headers,
         "Content-Type": "application/json",
-        "Accept-Encoding": "identity", // Prevent compression issues
+        "Accept-Encoding": "identity",
         "User-Agent": "ConwayAutomaton/0.1.0",
       },
       body,
     });
 
     if (initialResp.status !== 402) {
-      // Clone before reading to avoid 'Body is unusable' if we read it later or if json() fails half-way
+      if (!initialResp.ok) {
+        console.log(`[x402] Error Status: ${initialResp.status} ${initialResp.statusText}`);
+        const retryAfter = initialResp.headers.get("Retry-After");
+        if (retryAfter) console.log(`[x402] Retry-After: ${retryAfter}`);
+      }
+
       const errorClone = initialResp.clone();
-      const data = await errorClone
-        .json()
-        .catch(() => errorClone.text());
+      const text = await errorClone.text();
+
+      if (!initialResp.ok) {
+        console.log(`[x402] Response Body: ${text.slice(0, 500)}`);
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
       return { success: initialResp.ok, response: data, status: initialResp.status };
     }
 
