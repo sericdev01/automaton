@@ -256,7 +256,7 @@ export async function runAgentLoop(
             args = {};
           }
 
-          log(config, `[TOOL] ${tc.function.name}(${JSON.stringify(args).slice(0, 100)})`);
+          log(config, `[TOOL] ${tc.function.name}(${JSON.stringify(args)})`);
 
           const result = await executeTool(
             tc.function.name,
@@ -271,7 +271,7 @@ export async function runAgentLoop(
 
           log(
             config,
-            `[TOOL RESULT] ${tc.function.name}: ${result.error ? `ERROR: ${result.error}` : result.result.slice(0, 200)}`,
+            `[TOOL RESULT] ${tc.function.name}: ${result.error ? `ERROR: ${result.error}` : result.result}`,
           );
 
           callCount++;
@@ -311,7 +311,7 @@ export async function runAgentLoop(
 
       // Log the turn
       if (turn.thinking) {
-        log(config, `[THOUGHT] ${turn.thinking.slice(0, 300)}`);
+        log(config, `[THOUGHT] ${turn.thinking}`);
       }
 
       // ── Check for sleep command ──
